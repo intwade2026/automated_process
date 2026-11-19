@@ -1,20 +1,25 @@
 
 from playwright.sync_api import sync_playwright
 
-with sync_playwright() as p:
 
-    browser = p.chromium.launch(
-        channel="chrome",
-        headless=False
-    )
+def main():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            channel="chrome",
+            headless=False
+        )
 
-    page = browser.new_page()
+        try:
+            page = browser.new_page()
+            page.goto("https://www.google.com")
 
-    page.goto("https://www.google.com")
+            print("Chrome est opérationnel !")
+            print("Titre :", page.title())
 
-    print("Chrome est opérationnel !")
-    print("Titre :", page.title())
+            input("Appuie sur Entrée pour fermer...")
+        finally:
+            browser.close()
 
-    input("Appuie sur Entrée pour fermer...")
 
-    browser.close()
+if __name__ == "__main__":
+    main()

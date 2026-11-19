@@ -1,110 +1,52 @@
 
-import os
-import re
+from playwright.sync_api import sync_playwright
 
-from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright, expect
-
-# Chargement des variables d'environnement
-load_dotenv()
-
-URL = os.getenv("OM_URL")
-USERNAME = os.getenv("OM_USERNAME")
-PASSWORD = os.getenv("OM_PASSWORD")
-
-if not all([URL, USERNAME, PASSWORD]):
-    raise ValueError("Configuration .env incomplete")
+from authentication import login
+from config import load_config
+from navigation import follow_navigation, visible_error_messages
 
 
-with sync_playwright() as p:
+def main():
+    config = load_config()
 
-    browser = p.chromium.launch(
-        channel="chrome",
-        headless=False
-    )
-
-    page = browser.new_page()
-
-    try:
-        # 1. OUVERTURE DE RAiD
-        print("1. Ouverture de RAiD...")
-
-        page.goto(URL, wait_until="domcontentloaded")
-
-        # 2. ATTENTE DU FORMULAIRE
-        print("2. Attente du formulaire...")
-
-        username_field = page.get_by_label("Username")
-        password_field = page.get_by_label("Password")
-
-        username_field.wait_for(
-            state="visible",
-            timeout=60000
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            channel="chrome",
+            headless=False,
         )
+        page = browser.new_page(viewport={"width": 1440, "height": 800})
 
-        password_field.wait_for(
-            state="visible",
-            timeout=60000
-        )
+        try:
+            login(page, config)
 
-        # 3. REMPLISSAGE DES IDENTIFIANTS
-        print("3. Saisie des identifiants...")
+            print("URL actuelle :", page.url)
+            print("Titre :", page.title())
 
-        username_field.fill(USERNAME)
-        password_field.fill(PASSWORD)
+            follow_navigation(page)
 
-        # 4. ATTENTE DE SIGN IN
-        print("4. Attente de la fin du chargement...")
+            messages = visible_error_messages(page)
+            if messages:
+                print("Message(s) d'erreur détecté(s) :")
+                for message in messages:
+                    print(f"- {message}")
+            else:
+                print("Aucun message d'erreur visible détecté sur la page.")
 
-        login_button = page.locator(
-            "button.btn.btn-primary[type='submit']"
-        )
+            page.screenshot(path="apres_parcours.png", full_page=True)
+            input("Parcours terminé. Appuie sur Entrée pour fermer...")
 
-        expect(login_button).to_have_text(
-            re.compile(r"^\s*sign\s*in\s*$", re.IGNORECASE),
-            timeout=120000
-        )
+        except Exception as error:
+            print("ERREUR :", error)
 
-        expect(login_button).to_be_enabled(
-            timeout=30000
-        )
+            for message in visible_error_messages(page):
+                print("Message d'erreur de l'application :", message)
 
-        print("5. Bouton Sign In disponible !")
+            page.screenshot(path="erreur_raid.png", full_page=True)
+            input("Appuie sur Entrée pour fermer...")
 
-        # 5. CLIQUER SUR SIGN IN
-        print("6. Connexion à RAiD...")
+        finally:
+            browser.close()
 
-        login_button.click()
 
-        print("7. Bouton cliqué. Vérification de la réponse...")
-
-        # Attendre la réponse de l'application
-        page.wait_for_timeout(5000)
-
-        print("URL actuelle :", page.url)
-        print("Titre :", page.title())
-
-        # Capture après tentative de connexion
-        page.screenshot(
-            path="apres_connexion.png",
-            full_page=True
-        )
-
-        input(
-            "Vérifie si la page d'accueil est affichée. "
-            "Appuie sur Entrée pour fermer..."
-        )
-
-    except Exception as e:
-
-        print("ERREUR :", e)
-
-        page.screenshot(
-            path="erreur_raid.png",
-            full_page=True
-        )
-
-        input("Appuie sur Entrée pour fermer...")
-
-    finally:
-        browser.close()
+if __name__ == "__main__":
+    main()
